@@ -3,5 +3,9 @@ module.exports = {
   repositories: {
     autodocker: "git@github.com:slavaGanzin/autodocker.git"
   },
-  'workdir': '/tmp/autodocker'
+  workdir: '/tmp/autodocker',
+  portastic: {
+    min: 8000,
+    max: 9000
+  }
 }

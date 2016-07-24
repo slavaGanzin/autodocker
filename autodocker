@@ -1,16 +1,34 @@
 #!/usr/bin/env node
-const R = require('ramda')
-const debug = R.memoize(require('debug'))
-const fs = require('fs')
+const R            = require('ramda')
+const port         = require('portastic')
+const debug        = R.memoize(require('debug'))
+const fs           = require('fs')
 const { execSync } = require('child_process')
+const _spawn       = require('child_process').spawn
+
+const {
+  repositories, timeout, workdir, portastic
+} = require('./config')
+
+const getFreePorts = () => port.find(portastic)
+
 const exec = (...args) => {
   debug('exec')(...args)
   let result = String(execSync(...args))
-  if (result) debug('exec:result')(result)
+  if (result) debug('exec:stdout')(result)
   return result
 }
 
-let {repositories,timeout,workdir} = require('./config')
+const spawn = (args, {cwd} = {cwd: '.'}) => {
+  return new Promise((resolve, reject) => {
+    let [command, ..._args] = R.split(' ', args)
+    debug('spawn')(command, cwd)
+    let process = _spawn(command, _args)
+    process.stdout.on('data', (data)=>debug(`spawn:stdout:${command}`)("\n" + String(data)))
+    process.stderr.on('data', (data)=>debug(`spawn:stderr:${command}`)("\n" + String(data)))
+    process.on('close', (code) => resolve(code))
+  }).catch(console.error)
+}
 
 const createWorkDir = () =>
   exec(`ls ${workdir} 1>/dev/null ||\n mkdir ${workdir}`)
@@ -35,14 +53,27 @@ const getNotUpdatedRefs = (cwd) =>
   
 const updateBranches = (cwd) => exec("git fetch -a", {cwd})
 
+const runImageOnPort = R.curry((image, port) => {
+  let [fromPort, ...ports] = exposedPorts(fs.readFileSync(`${cwd}/Dockerfile`))
+  exec(`docker run --name ${image} ${image} -p ${port}:${fromPort} -d`)
+})
+
+const exposedPorts = R.compose(R.flatten, R.map(R.match(/\d+/g)), R.match(/expose.*/gi))
+
 const buildBranches = ({cwd, refs, name}) =>
-  R.map(ref => {
+  Promise.all(R.map(ref => {
     let [branch, commit, ...message] = R.split(' ',ref)
+    message = message.join(' ')
+    let image = `${name}-${branch}`
     debug("branch")(branch, commit, message)
     
     exec(`git checkout ${branch}`)
-    exec(`docker build --tag ${name}-${branch} .`)
-  }, refs)
+    exec(`git pull`)
+    return spawn(`docker build --tag ${image} .`)
+      .then(getFreePorts)
+      .then(R.head)
+      .then(runImageOnPort(image))
+  }, refs))
 
 const processRepos = R.mapObjIndexed((path, name) => {
   const cwd = [workdir,name].join('/')

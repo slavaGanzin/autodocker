@@ -1,42 +1,58 @@
 #!/usr/bin/env node
 const R = require('ramda')
-
-
+const debug = R.memoize(require('debug'))
 const fs = require('fs')
-const child_process = require('child_process')
+const { execSync } = require('child_process')
+const exec = (...args) => {
+  debug('exec')(...args)
+  let result = String(execSync(...args))
+  if (result) debug('exec:result')(result)
+  return result
+}
 
 let {repositories,timeout,workdir} = require('./config')
 
-const createWorkDir = () => {try {fs.mkdirSync(workdir)} catch(e) {}}
+const createWorkDir = () =>
+  exec(`ls ${workdir} 1>/dev/null ||\n mkdir ${workdir}`)
 
-createWorkDir()
-
-const cloneRepoIfNotExists = (path, name) => {
-    const repoDir = [workdir,name].join('/')
-    try {
-      fs.statSync(repoDir)
-    } catch (e) {
-      child_process.spawnSync(`git clone --depth 1 ${path} ${repoDir}`)
-    }
-    return repoDir
-    
-}
-R.mapObjIndexed(cloneRepoIfNotExists, repositories)
+const cloneRepoIfNotExists = ({path, cwd}) =>
+  exec(`ls ${cwd} 1>/dev/null ||\n git clone --depth 1 ${path} ${cwd}`)
 
 const parseStdout = R.compose(R.reject(R.isEmpty), R.split('\n'), String)
 const removeSelectedBranch = R.map(R.replace(/^\*\s+/,''))
 const removeOrigin = R.map(R.replace(/^\s+origin\//,''))
+const removeHEAD = R.reject(R.test(/HEAD/))
   
 const getRemoteBranchesHEAD = (cwd) =>
-  removeOrigin(parseStdout(child_process.execSync("git branch -r -v --no-color", {cwd})))
+  removeOrigin(removeHEAD(parseStdout(exec("git branch -r -v --no-color", {cwd}))))
   
 const getLocalBranchesHEAD = (cwd) =>
-  removeSelectedBranch(parseStdout(child_process.execSync("git branch -v --no-color", {cwd})))
+  removeSelectedBranch(parseStdout(exec("git branch -v --no-color", {cwd})))
 
-const getRemoteUpdatedBranches = () =>
-  R.difference(getRemoteBranchesHEAD(), getLocalBranchesHEAD())
+const getNotUpdatedRefs = (cwd) =>
+  getRemoteBranchesHEAD(cwd)
+  // R.difference(getRemoteBranchesHEAD(cwd), getLocalBranchesHEAD(cwd))
   
-const updateBranches
+const updateBranches = (cwd) => exec("git fetch -a", {cwd})
+
+const buildBranches = ({cwd, refs, name}) =>
+  R.map(ref => {
+    let [branch, commit, ...message] = R.split(' ',ref)
+    debug("branch")(branch, commit, message)
+    
+    exec(`git checkout ${branch}`)
+    exec(`docker build --tag ${name}-${branch} .`)
+  }, refs)
+
+const processRepos = R.mapObjIndexed((path, name) => {
+  const cwd = [workdir,name].join('/')
+  cloneRepoIfNotExists({path, cwd})
+  buildBranches({cwd, name, refs: getNotUpdatedRefs(cwd)})
+})
+
+createWorkDir()
+processRepos(repositories)
+
 const tick = () => {
     
 }

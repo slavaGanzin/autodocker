@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "description": "Pull your repos and automaticaly build and launch it using docker",
   "scripts": {
-    "start": "node autodocker"
+    "start": "DEBUG=* node autodocker"
   },
   "repository": {
     "type": "git",

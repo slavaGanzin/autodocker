@@ -55,7 +55,7 @@ const updateBranches = (cwd) => exec("git fetch -a", {cwd})
 
 const runImageOnPort = R.curry((image, cwd, port) => {
   let [fromPort, ...ports] = exposedPorts(fs.readFileSync(`${cwd}/Dockerfile`))
-  spawn(`docker run --name ${image} ${image} -p ${port}:${fromPort} -d`)
+  spawn(`docker run -it --name ${image} ${image} -p ${port}:${fromPort} -d`)
 })
 
 const exposedPorts = R.compose(R.flatten, R.map(R.match(/\d+/g)), R.match(/expose.*/gi))

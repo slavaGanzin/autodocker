@@ -22,10 +22,10 @@ const exec = (...args) => {
 const spawn = (args, {cwd} = {cwd: '.'}) => {
   return new Promise((resolve, reject) => {
     let [command, ..._args] = R.split(' ', args)
-    debug('spawn')(command, cwd)
+    debug('spawn')(args, cwd)
     let process = _spawn(command, _args)
-    process.stdout.on('data', (data)=>debug(`spawn:stdout:${command}`)("\n" + String(data)))
-    process.stderr.on('data', (data)=>debug(`spawn:stderr:${command}`)("\n" + String(data)))
+    process.stdout.on('data', (data)=>debug(`spawn:stdout:${args}`)("\n" + String(data)))
+    process.stderr.on('data', (data)=>debug(`spawn:stderr:${args}`)("\n" + String(data)))
     process.on('close', (code) => resolve(code))
   }).catch(console.error)
 }
@@ -53,9 +53,9 @@ const getNotUpdatedRefs = (cwd) =>
   
 const updateBranches = (cwd) => exec("git fetch -a", {cwd})
 
-const runImageOnPort = R.curry((image, port) => {
+const runImageOnPort = R.curry((image, cwd, port) => {
   let [fromPort, ...ports] = exposedPorts(fs.readFileSync(`${cwd}/Dockerfile`))
-  exec(`docker run --name ${image} ${image} -p ${port}:${fromPort} -d`)
+  spawn(`docker run --name ${image} ${image} -p ${port}:${fromPort} -d`)
 })
 
 const exposedPorts = R.compose(R.flatten, R.map(R.match(/\d+/g)), R.match(/expose.*/gi))
@@ -69,10 +69,12 @@ const buildBranches = ({cwd, refs, name}) =>
     
     exec(`git checkout ${branch}`)
     exec(`git pull`)
+    runImageOnPort(image, 8000)
     return spawn(`docker build --tag ${image} .`)
       .then(getFreePorts)
       .then(R.head)
-      .then(runImageOnPort(image))
+      .then(runImageOnPort(image, cwd))
+      .catch(debug('docker:error'))
   }, refs))
 
 const processRepos = R.mapObjIndexed((path, name) => {

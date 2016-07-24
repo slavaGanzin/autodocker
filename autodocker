@@ -54,9 +54,20 @@ const getNotUpdatedRefs = (cwd) =>
 const updateBranches = (cwd) => exec("git fetch -a", {cwd})
 
 const runImageOnPort = R.curry((image, cwd, port) => {
-  let [fromPort, ...ports] = exposedPorts(fs.readFileSync(`${cwd}/Dockerfile`))
-  spawn(`docker run -it --name ${image} ${image} -p ${port}:${fromPort} -d`)
+  // let [fromPort, ...ports] = exposedPorts(fs.readFileSync(`${cwd}/Dockerfile`))
+  let fromPort = 80
+  spawn(`docker run --name ${image} -p ${port}:${fromPort} -d ${image}`)
 })
+
+const isRunning = image =>
+  R.test(new RegExp(`\b${image}\b`,'gim'), exec('docker ps'))
+  
+const shutdownKernel = image =>
+  exec(`docker rm -f ${image}`)
+
+const shutdownIfRunning = image => {
+  if (isRunning(image)) shutdownKernel(image)
+}
 
 const exposedPorts = R.compose(R.flatten, R.map(R.match(/\d+/g)), R.match(/expose.*/gi))
 
@@ -69,10 +80,14 @@ const buildBranches = ({cwd, refs, name}) =>
     
     exec(`git checkout ${branch}`)
     exec(`git pull`)
-    runImageOnPort(image, 8000)
-    return spawn(`docker build --tag ${image} .`)
+    return Promise.resolve()
+      // .then(() => spawn(`docker build --tag ${image} .`)
       .then(getFreePorts)
       .then(R.head)
+      .then( port => {
+        shutdownIfRunning(image)
+        return port
+      })
       .then(runImageOnPort(image, cwd))
       .catch(debug('docker:error'))
   }, refs))

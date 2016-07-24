@@ -1,0 +1,43 @@
+#!/usr/bin/env node
+const R = require('ramda')
+
+
+const fs = require('fs')
+const child_process = require('child_process')
+
+let {repositories,timeout,workdir} = require('./config')
+
+const createWorkDir = () => {try {fs.mkdirSync(workdir)} catch(e) {}}
+
+createWorkDir()
+
+const cloneRepoIfNotExists = (path, name) => {
+    const repoDir = [workdir,name].join('/')
+    try {
+      fs.statSync(repoDir)
+    } catch (e) {
+      child_process.spawnSync(`git clone --depth 1 ${path} ${repoDir}`)
+    }
+    return repoDir
+    
+}
+R.mapObjIndexed(cloneRepoIfNotExists, repositories)
+
+const parseStdout = R.compose(R.reject(R.isEmpty), R.split('\n'), String)
+const removeSelectedBranch = R.map(R.replace(/^\*\s+/,''))
+const removeOrigin = R.map(R.replace(/^\s+origin\//,''))
+  
+const getRemoteBranchesHEAD = (cwd) =>
+  removeOrigin(parseStdout(child_process.execSync("git branch -r -v --no-color", {cwd})))
+  
+const getLocalBranchesHEAD = (cwd) =>
+  removeSelectedBranch(parseStdout(child_process.execSync("git branch -v --no-color", {cwd})))
+
+const getRemoteUpdatedBranches = () =>
+  R.difference(getRemoteBranchesHEAD(), getLocalBranchesHEAD())
+  
+const updateBranches
+const tick = () => {
+    
+}
+setTimeout(tick, timeout)

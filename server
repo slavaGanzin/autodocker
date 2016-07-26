@@ -1,0 +1,51 @@
+#!/usr/bin/env node-dev
+process.env.DEBUG = process.env.DEBUG || "*"
+
+const http      = require('http')
+const httpProxy = require('http-proxy')
+const fs        = require('fs')
+const R         = require('ramda')
+const proxy     = httpProxy.createProxy(require('./config').proxy)
+const debug     = R.memoize(require('debug'))
+
+let matchers = []
+const createMatcher = ([rule, target]) =>
+  R.ifElse(R.test(new RegExp(rule, 'gi')), ()=>target, ()=>null)
+
+const updateMatchers = () =>
+  matchers = R.map(createMatcher, JSON.parse(fs.readFileSync(__dirname+'/proxyRules.json')))
+  
+updateMatchers()
+setInterval(updateMatchers, 1000)
+
+proxy.on('error', (err, req, res) => {
+  res.writeHead(500, {
+    'Content-Type': 'text/plain'
+  })
+  res.end('Something went wrong. And we are reporting a custom error message.')
+  debug('error')(err.toString())
+  debug('error')(req.headers.host + req.url)
+})
+
+debug('server')('started')
+http.createServer(function(req, res) {
+  let URL = req.headers.host + req.url
+  let target = R.head(R.reject(R.isNil, R.ap(matchers, [URL])))
+  
+  if (target) {
+    if (R.test(/socket.io\/\?/, req.url)) {
+      return proxy.web(req, res, {target});
+    } else {
+      debug('redirect')(`${URL} -> ${target}`)
+      return proxy.web(req, res, {target});
+    }
+  }
+
+  res.writeHead(500, { 'Content-Type': 'text/plain' });
+  res.end('The request url and path did not match any of the listed rules!');
+}).listen(80)
+
+https://github.com/nodejitsu/node-http-proxy#readme
+proxyServer.on('upgrade', function (req, socket, head) {
+  proxy.ws(req, socket, head);
+});

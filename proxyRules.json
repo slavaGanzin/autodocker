@@ -1,0 +1,5 @@
+[
+  ["aaa/test", "http://localhost:8080/cool"],
+  ["bbb.*", "http://localhost:3000"],
+  ["aaa", "http://localhost"]
+]

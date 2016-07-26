@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+process.env.DEBUG = process.env.DEBUG || "*,-portastic"
+
 const R            = require('ramda')
 const port         = require('portastic')
 const debug        = R.memoize(require('debug'))

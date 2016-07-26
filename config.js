@@ -7,5 +7,12 @@ module.exports = {
   portastic: {
     min: 8000,
     max: 9000
+  },
+  proxy: {
+      changeOrigin: true,
+      autoRewrite: true,
+      hostRewrite: true,
+      ws: true,
+      xfwd: true
   }
 }

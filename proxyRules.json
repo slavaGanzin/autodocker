@@ -1,5 +1,42 @@
 [
-  ["aaa/test", "http://localhost:8080/cool"],
-  ["bbb.*", "http://localhost:3000"],
-  ["aaa", "http://localhost"]
+ [
+  "develop.iis-session-processor.wartechrnd",
+  "http://127.0.0.1:8000"
+ ],
+ [
+  "add_eventtypes.feature.iis-session-processor.wartechrnd",
+  "http://127.0.0.1:8000"
+ ],
+ [
+  "combatalert.feature.iis-session-processor.wartechrnd",
+  "http://127.0.0.1:8000"
+ ],
+ [
+  "create_update_event_type.feature.iis-session-processor.wartechrnd",
+  "http://127.0.0.1:8000"
+ ],
+ [
+  "eventnewlog.feature.iis-session-processor.wartechrnd",
+  "http://127.0.0.1:8000"
+ ],
+ [
+  "eventupdate.feature.iis-session-processor.wartechrnd",
+  "http://127.0.0.1:8000"
+ ],
+ [
+  "events_fix.feature.iis-session-processor.wartechrnd",
+  "http://127.0.0.1:8000"
+ ],
+ [
+  "importsession.feature.iis-session-processor.wartechrnd",
+  "http://127.0.0.1:8000"
+ ],
+ [
+  "radiosessiongetbyid.feature.iis-session-processor.wartechrnd",
+  "http://127.0.0.1:8000"
+ ],
+ [
+  "master.iis-session-processor.wartechrnd",
+  "http://127.0.0.1:8000"
+ ]
 ]

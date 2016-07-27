@@ -1,6 +1,5 @@
 #!/usr/bin/env node
-process.env.DEBUG = process.env.DEBUG || "*,-portastic"
-
+process.env.DEBUG = process.env.DEBUG || "*,-portastic*"
 const R            = require('ramda')
 const port         = require('portastic')
 const debug        = R.memoize(require('debug'))
@@ -9,8 +8,19 @@ const { execSync } = require('child_process')
 const _spawn       = require('child_process').spawn
 
 const {
-  repositories, timeout, workdir, portastic
+  repositories, timeout, workdir, portastic, rulesFile
 } = require('./config')
+
+let proxyRules = []
+const clearProxyRules = () => proxyRules = []
+const addToProxyRules = R.curry((host, port) => {
+  debug('proxy:rules:add')(host, port)
+  proxyRules.push([host, `http://127.0.0.1:${port}`])
+})
+const writeProxyRules = () => {
+  debug('proxy:rules:written')(proxyRules)
+  fs.writeFileSync(__dirname+rulesFile, JSON.stringify(proxyRules, null, ' '))
+}
 
 const getFreePorts = () => port.find(portastic)
 
@@ -24,19 +34,37 @@ const exec = (...args) => {
 const spawn = (args, {cwd} = {cwd: '.'}) => {
   return new Promise((resolve, reject) => {
     let [command, ..._args] = R.split(' ', args)
-    debug('spawn')(args, cwd)
+    debug(args)(args, cwd)
+    let file = args.replace(/[\s\/]/g,'.')
     let process = _spawn(command, _args)
-    process.stdout.on('data', (data)=>debug(`spawn:stdout:${args}`)("\n" + String(data)))
-    process.stderr.on('data', (data)=>debug(`spawn:stderr:${args}`)("\n" + String(data)))
+    let [stdout,stderr] = R.map(fs.createWriteStream, [`logs/stdout-${file}`,`logs/stderr-${file}`])
+    
+    process.stdout
+      .on('data', (data)=>debug(args)("\n" + String(data)))
+      .pipe(stdout)
+    process.stderr
+      .on('data', (data)=>debug(`stderr:${args}`)("\n" + String(data)))
+      .pipe(stderr)
+      
     process.on('close', (code) => resolve(code))
   }).catch(console.error)
 }
 
-const createWorkDir = () =>
-  exec(`ls ${workdir} 1>/dev/null ||\n mkdir ${workdir}`)
+const createWorkDir = () => {
+  try {
+    fs.statSync(workdir)
+  } catch (e) {
+    exec(`mkdir ${workdir}`)
+  }
+}
 
-const cloneRepoIfNotExists = ({path, cwd}) =>
-  exec(`ls ${cwd} 1>/dev/null ||\n git clone --depth 1 ${path} ${cwd}`)
+const cloneRepoIfNotExists = ({path, cwd}) => {
+  try {
+    fs.statSync(cwd)
+  } catch (e) {
+    exec(`git clone ${path} ${cwd}`)
+  }
+}
 
 const parseStdout = R.compose(R.reject(R.isEmpty), R.split('\n'), String)
 const removeSelectedBranch = R.map(R.replace(/^\*\s+/,''))
@@ -50,19 +78,23 @@ const getLocalBranchesHEAD = (cwd) =>
   removeSelectedBranch(parseStdout(exec("git branch -v --no-color", {cwd})))
 
 const getNotUpdatedRefs = (cwd) =>
-  getRemoteBranchesHEAD(cwd)
-  // R.difference(getRemoteBranchesHEAD(cwd), getLocalBranchesHEAD(cwd))
+  R.difference(getRemoteBranchesHEAD(cwd), getLocalBranchesHEAD(cwd))
   
 const updateBranches = (cwd) => exec("git fetch -a", {cwd})
 
 const runImageOnPort = R.curry((image, cwd, port) => {
-  // let [fromPort, ...ports] = exposedPorts(fs.readFileSync(`${cwd}/Dockerfile`))
-  let fromPort = 80
-  spawn(`docker run --name ${image} -p ${port}:${fromPort} -d ${image}`)
+  let [fromPort=8083, ...ports] = exposedPorts(fs.readFileSync(`${cwd}/Dockerfile`))
+  spawn(`docker run --interactive --detach --name ${image} --publish ${port}:${fromPort} ${image}`)
+  return port
 })
 
-const isRunning = image =>
-  R.test(new RegExp(`\b${image}\b`,'gim'), exec('docker ps'))
+const isRunning = image => {
+  try {
+    return !R.isEmpty(exec(`docker ps -a | grep -E ${image}`))
+  } catch (e) {
+    return false
+  }
+}
   
 const shutdownKernel = image =>
   exec(`docker rm -f ${image}`)
@@ -71,39 +103,48 @@ const shutdownIfRunning = image => {
   if (isRunning(image)) shutdownKernel(image)
 }
 
-const exposedPorts = R.compose(R.flatten, R.map(R.match(/\d+/g)), R.match(/expose.*/gi))
+const exposedPorts = R.compose(R.flatten, R.map(R.match(/\d+/g)), R.match(/expose.*/gi), String)
 
-const buildBranches = ({cwd, refs, name}) =>
-  Promise.all(R.map(ref => {
-    let [branch, commit, ...message] = R.split(' ',ref)
-    message = message.join(' ')
-    let image = `${name}-${branch}`
-    debug("branch")(branch, commit, message)
-    
-    exec(`git checkout ${branch}`)
-    exec(`git pull`)
-    return Promise.resolve()
-      // .then(() => spawn(`docker build --tag ${image} .`)
-      .then(getFreePorts)
-      .then(R.head)
-      .then( port => {
-        shutdownIfRunning(image)
-        return port
-      })
-      .then(runImageOnPort(image, cwd))
-      .catch(debug('docker:error'))
-  }, refs))
 
-const processRepos = R.mapObjIndexed((path, name) => {
+const buildBranches = ({cwd, refs, name}) => {
+  sequence = Promise.resolve()
+  exec(`git pull`, {cwd})
+  R.map(ref => {
+    sequence = sequence.then( () => {
+      let [branch, commit, ...message] = R.split(' ',ref)
+      message = message.join(' ')
+      let image = `${name}.${branch}`.toLowerCase().replace(/[\/]/g, '.').split('.').reverse().join('.')
+      debug("branch")(branch, commit, message)
+      
+      exec(`git checkout ${branch}`, {cwd})
+      return image
+    })
+    .then(image => Promise.resolve()
+    // .then(() => spawn(`docker build --tag ${image} ${cwd}`))
+    .then(getFreePorts)
+    .then(R.head)
+    .then( port => shutdownIfRunning(image) || port )
+    .then(addToProxyRules(image))
+    .then(runImageOnPort(image, cwd))
+    .catch(debug('docker:error'))
+  )}, refs)
+  
+  return sequence
+}
+
+const processRepos = R.map((path) => {
+  const name = path.replace(/.*:(.*)\.git/, '$1')
   const cwd = [workdir,name].join('/')
   cloneRepoIfNotExists({path, cwd})
+  clearProxyRules()
   buildBranches({cwd, name, refs: getNotUpdatedRefs(cwd)})
+  .then(writeProxyRules)
 })
 
 createWorkDir()
 processRepos(repositories)
 
-const tick = () => {
-    
-}
-setTimeout(tick, timeout)
+// const tick = () => {
+//
+// }
+// setTimeout(tick, timeout)

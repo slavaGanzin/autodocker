@@ -76,7 +76,8 @@ const getLocalBranchesHEAD = (cwd) =>
   removeSelectedBranch(parseStdout(exec("git branch -v --no-color", {cwd})))
 
 const getNotUpdatedRefs = (cwd) => {
-  let refs = [R.head(R.difference(getRemoteBranchesHEAD(cwd), getLocalBranchesHEAD(cwd)))]
+  // let refs = [R.head(R.difference(getRemoteBranchesHEAD(cwd), getLocalBranchesHEAD(cwd)))]
+  let refs = [R.head(getLocalBranchesHEAD(cwd))]
   debug('not:updated:refs')(refs)
   return refs
 }
@@ -113,15 +114,14 @@ const buildBranches = ({cwd, refs, name}) => {
   R.map(ref => {
     sequence = sequence
     .then( () => {
-      let [branch, commit, ...message] = R.split(' ',ref)
-      message = message.join(' ')
+      let [,branch, commit, message] = R.match(/(\w+)\s+(\w+)\s+(.*)/,ref)
       let image = `${name}.${branch}`.toLowerCase().replace(/[\/]/g, '.').split('.').reverse().join('.')
       debug("branch")(branch, commit, message)
       
       exec(`git checkout ${branch}`, {cwd})
       return getFreePorts().then((ports) => [image, R.head(ports)])
     })
-    .then(([image, port]) => 
+    .then(([image, port]) =>
       spawn(`docker build --tag ${image} ${cwd}`)
       .then(() => shutdownIfRunning(image))
       .then(() => addToProxyRules(image, port))
@@ -134,7 +134,7 @@ const buildBranches = ({cwd, refs, name}) => {
 }
 
 const processRepos = R.map((path) => {
-  const name = path.replace(/.*:(.*)\.git/, '$1')
+  const name = path.replace(/.*\/\/.*\/(.*\/.*)\.git/, '$1')
   const cwd = [workdir,name].join('/')
   cloneRepoIfNotExists({path, cwd})
   clearProxyRules()

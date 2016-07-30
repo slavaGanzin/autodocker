@@ -4,16 +4,16 @@ const { execSync, spawn } = require('child_process')
 const fs           = require('fs')
 
 const exec = (...args) => {
-  debug('exec')(...args)
+  debug(...args)('')
   let result = String(execSync(...args))
-  if (result) debug('exec:stdout')(result)
+  if (result) debug(...args)(result)
   return result
 }
 
 const _spawn = (args, {cwd} = {cwd: '.'}) =>
   new Promise((resolve, reject) => {
     let [command, ..._args] = R.split(' ', args)
-    debug(args)(args, cwd)
+    debug(args)(cwd)
     let file = args.replace(/[\s\/]/g,'.')
     let process = spawn(command, _args)
     let [stdout,stderr] = R.map(fs.createWriteStream, [`logs/stdout-${file}`,`logs/stderr-${file}`])

@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 process.env.DEBUG = process.env.DEBUG || "*,-portastic*"
-const R            = require('ramda')
-const port         = require('portastic')
-const debug        = R.memoize(require('debug'))
-const fs           = require('fs')
-const { execSync } = require('child_process')
+const R             = require('ramda')
+const port          = require('portastic')
+const debug         = R.memoize(require('debug'))
+const fs            = require('fs')
+const {spawn, exec} = require('./process')
 
 const {
   repositories, timeout, workdir, portastic, rulesFile
@@ -22,31 +22,6 @@ const writeProxyRules = () => {
 }
 
 const getFreePorts = () => port.find(portastic)
-
-const exec = (...args) => {
-  debug('exec')(...args)
-  let result = String(execSync(...args))
-  if (result) debug('exec:stdout')(result)
-  return result
-}
-
-const spawn = (args, {cwd} = {cwd: '.'}) =>
-  new Promise((resolve, reject) => {
-    let [command, ..._args] = R.split(' ', args)
-    debug(args)(args, cwd)
-    let file = args.replace(/[\s\/]/g,'.')
-    let process = require('child_process').spawn(command, _args)
-    let [stdout,stderr] = R.map(fs.createWriteStream, [`logs/stdout-${file}`,`logs/stderr-${file}`])
-    
-    process.stdout
-      .on('data', (data)=>debug(args)("\n" + String(data)))
-      .pipe(stdout)
-    process.stderr
-      .on('data', (data)=>debug(`stderr:${args}`)("\n" + String(data)))
-      .pipe(stderr)
-      
-    process.on('close', (code) => resolve(code))
-  })
 
 const createWorkDir = () => {
   try {

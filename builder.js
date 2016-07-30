@@ -22,6 +22,7 @@ const writeProxyRules = () => {
   fs.writeFileSync(__dirname+rulesFile, JSON.stringify(proxyRules, null, ' '))
 }
 
+let usedPorts = []
 const getFreePorts = () => port.find(portastic)
 
 const createWorkDir = () => {
@@ -95,7 +96,9 @@ const buildBranches = ({cwd, refs, name}) => {
       debug("branch")(branch, commit, message)
       
       exec(`git checkout ${branch}`, {cwd})
-      return getFreePorts().then((ports) => [image, R.head(ports)])
+      return getFreePorts()
+      .then((ports) => [image, R.head(R.difference(ports, usedPorts))])
+      .then(([image, port]) => usedPorts.push(port) && [image,port])
     })
     .then(([image, port]) =>
       spawn(`docker build --tag ${image} ${cwd}`)
@@ -120,6 +123,9 @@ const processRepos = R.map((path) => {
 })
 
 createWorkDir()
-const start = () => Promise.all(processRepos(repositories)).then(start).catch(debug('autodoker:error'))
+const start = () => {
+  usedPorts = []
+  return Promise.all(processRepos(repositories)).then(start).catch(debug('autodoker:error'))
+}
 
 module.exports = { start }

@@ -6,7 +6,8 @@ module.exports = {
   workdir: '/tmp/autodocker',
   portastic: {
     min: 60000,
-    max: 61000
+    // max: 61000
+    max: 60002
   },
   proxy: {
       changeOrigin: true,

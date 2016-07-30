@@ -1,12 +1,12 @@
 module.exports = {
   timeout: process.env.TIMEOUT || 1000,
   repositories: [
-      'https://github.com/slavaGanzin/autodocker.git'
+    'https://github.com/slavaGanzin/autodockerHelloWorld.git'
   ],
   workdir: '/tmp/autodocker',
   portastic: {
-    min: 8000,
-    max: 9000
+    min: 60000,
+    max: 61000
   },
   proxy: {
       changeOrigin: true,

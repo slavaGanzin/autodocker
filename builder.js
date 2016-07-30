@@ -52,7 +52,8 @@ const getLocalBranchesHEAD = (cwd) =>
   removeSelectedBranch(parseStdout(exec("git branch -v --no-color", {cwd})))
 
 const getNotUpdatedRefs = (cwd) => {
-  let refs = [R.head(R.difference(getRemoteBranchesHEAD(cwd), getLocalBranchesHEAD(cwd)))]
+  // let refs = [R.head(R.difference(getRemoteBranchesHEAD(cwd), getLocalBranchesHEAD(cwd)))]
+  let refs = getRemoteBranchesHEAD(cwd)
   debug('not:updated:refs')(refs)
   return refs
 }
@@ -61,7 +62,7 @@ const updateBranches = (cwd) => exec("git fetch -a", {cwd})
 
 const runImageOnPort = (image, cwd, port) => {
   let [fromPort=8083, ...ports] = exposedPorts(fs.readFileSync(`${cwd}/Dockerfile`))
-  spawn(`docker run --interactive --tty --detach --name ${image} --publish ${port}:${fromPort} ${image}`)
+  spawn(`docker run --interactive --detach --name ${image} --publish ${port}:${fromPort} ${image}`)
   return port
 }
 
@@ -110,13 +111,15 @@ const buildBranches = ({cwd, refs, name}) => {
 }
 
 const processRepos = R.map((path) => {
-  const name = path.replace(/.*\/\/.*\/(.*\/.*)\.git/, '$1')
+  const name = R.takeLast(2, path.replace('.git','').split('/')).join('/')
   const cwd = [workdir,name].join('/')
   cloneRepoIfNotExists({path, cwd})
   clearProxyRules()
-  buildBranches({cwd, name, refs: getNotUpdatedRefs(cwd)})
+  return buildBranches({cwd, name, refs: getNotUpdatedRefs(cwd)})
   .then(writeProxyRules)
 })
 
 createWorkDir()
-module.exports = () => processRepos(repositories)
+const start = () => Promise.all(processRepos(repositories)).then(start).catch(debug('autodoker:error'))
+
+module.exports = { start }

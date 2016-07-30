@@ -8,7 +8,7 @@ const R           = require('ramda')
 const {rulesFile} = require('./config')
 const proxy       = httpProxy.createProxy(require('./config').proxy)
 const debug       = R.memoize(require('debug'))
-const build       = require('./builder')
+const builder     = require('./builder')
 
 let matchers      = []
 const createMatcher = ([rule, target]) =>
@@ -18,8 +18,7 @@ const updateMatchers = () =>
   matchers = R.map(createMatcher, JSON.parse(fs.readFileSync(__dirname+rulesFile)))
 
 setInterval(updateMatchers, 1000)
-setInterval(build, 60000)
-build()
+builder.start()
   
 proxy.on('error', (err, req, res) => {
   res.writeHead(500, {

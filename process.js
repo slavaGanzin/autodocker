@@ -25,7 +25,7 @@ const _spawn = (args, {cwd} = {cwd: '.'}) =>
       .on('data', (data)=>debug(`stderr:${args}`)("\n" + String(data)))
       .pipe(stderr)
       
-    process.on('close', (code) => resolve(code))
+    process.on('close', (code) => code == 0 ? resolve():reject(args))
   })
 
 module.exports = {spawn:_spawn, exec}

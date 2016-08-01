@@ -1,5 +1,5 @@
 #!/usr/bin/env node-dev
-process.env.DEBUG = process.env.DEBUG || "*,-portastic*"
+process.env.DEBUG = process.env.DEBUG || "*"
 
 const http        = require('http')
 const httpProxy   = require('http-proxy')
@@ -8,17 +8,17 @@ const R           = require('ramda')
 const {rulesFile} = require('./config')
 const proxy       = httpProxy.createProxy(require('./config').proxy)
 const debug       = R.memoize(require('debug'))
-const builder     = require('./builder')
 
 let matchers      = []
 const createMatcher = ([rule, target]) =>
   R.ifElse(R.test(new RegExp(rule, 'gi')), ()=>target, ()=>null)
 
-const updateMatchers = () =>
+const updateMatchers = () => {
   matchers = R.map(createMatcher, JSON.parse(fs.readFileSync(__dirname+rulesFile)))
+  debug('server:matchers', matchers)
+}
 
 setInterval(updateMatchers, 1000)
-builder.start()
   
 proxy.on('error', (err, req, res) => {
   res.writeHead(500, {
@@ -33,7 +33,6 @@ debug('server')('started')
 http.createServer(function(req, res) {
   let URL = req.headers.host + req.url
   let target = R.head(R.reject(R.isNil, R.ap(matchers, [URL])))
-  
   if (target) {
     // if (R.test(/socket.io\/\?/, req.url)) {
       // return proxy.web(req, res, {target});
@@ -47,7 +46,6 @@ http.createServer(function(req, res) {
   res.end('The request url and path did not match any of the listed rules!');
 }).listen(80)
 
-proxy.on('upgrade', proxy.ws)
 // proxy.on('upgrade', function (req, socket, head) {
 //   proxy.ws(req, socket, head);
 // });

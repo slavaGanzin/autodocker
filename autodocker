@@ -1,3 +1,5 @@
+#!/usr/bin/env node-dev
+process.env.DEBUG = process.env.DEBUG || "*,-portastic*"
 const R             = require('ramda')
 const port          = require('portastic')
 const debug         = R.memoize(require('debug'))
@@ -24,11 +26,11 @@ const writeProxyRules = () => {
 
 const getFreePorts = () => port.find(portastic)
 
-const createWorkDir = () => {
+const createDir = (dir) => {
   try {
-    fs.statSync(workdir)
+    fs.statSync(dir)
   } catch (e) {
-    exec(`mkdir ${workdir}`)
+    exec(`mkdir ${dir}`)
   }
 }
 
@@ -133,9 +135,8 @@ const processRepos = R.map((path) => {
   .then(writeProxyRules)
 })
 
-createWorkDir()
+R.map(createDir, ['./logs', workdir])
 const start = () => {
   return Promise.all(processRepos(repositories)).then(start).catch(debug('autodoker:error'))
 }
-
-module.exports = { start }
+start()

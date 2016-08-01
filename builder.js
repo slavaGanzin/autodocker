@@ -22,7 +22,6 @@ const writeProxyRules = () => {
   fs.writeFileSync(__dirname+rulesFile, JSON.stringify(proxyRules, null, ' '))
 }
 
-let usedPorts = []
 const getFreePorts = () => port.find(portastic)
 
 const createWorkDir = () => {
@@ -42,7 +41,7 @@ const cloneRepoIfNotExists = ({path, cwd}) => {
 }
 
 const parseStdout = R.compose(R.reject(R.isEmpty), R.split('\n'), String)
-const removeSelectedBranch = R.map(R.replace(/^\*\s+/,''))
+const removeSelectedBranch = R.map(R.replace(/^(\*)?\s+/,''))
 const removeOrigin = R.map(R.replace(/^\s+origin\//,''))
 const removeHEAD = R.reject(R.test(/HEAD/))
   
@@ -51,14 +50,13 @@ const getRemoteBranchesHEAD = (cwd) =>
   
 const getLocalBranchesHEAD = (cwd) =>
   removeSelectedBranch(parseStdout(exec("git branch -v --no-color", {cwd})))
-
+  
 const getNotUpdatedRefs = (cwd) => {
-  // let refs = [R.head(R.difference(getRemoteBranchesHEAD(cwd), getLocalBranchesHEAD(cwd)))]
-  let refs = getRemoteBranchesHEAD(cwd)
+  let refs = R.difference(getRemoteBranchesHEAD(cwd), getLocalBranchesHEAD(cwd))
   debug('not:updated:refs')(refs)
   return refs
 }
-  
+
 const updateBranches = (cwd) => exec("git fetch -a", {cwd})
 
 const runImageOnPort = (image, cwd, port) => {
@@ -86,45 +84,57 @@ const exposedPorts = R.compose(R.flatten, R.map(R.match(/\d+/g)), R.match(/expos
 
 
 const buildBranches = ({cwd, refs, name}) => {
+  exec(`git fetch --all`, {cwd})
   sequence = Promise.resolve()
-  exec(`git pull --all`, {cwd})
   R.map(ref => {
+    let [,branch, commit, message] = R.match(/(\w+)\s+(\w+)\s+(.*)/, ref)
+    let image = `${name}.${branch}`.toLowerCase().replace(/[\/]/g, '.').split('.').reverse().join('.')
+    let port = null
     sequence = sequence
     .then( () => {
-      let [,branch, commit, message] = R.match(/(\w+)\s+(\w+)\s+(.*)/,ref)
-      let image = `${name}.${branch}`.toLowerCase().replace(/[\/]/g, '.').split('.').reverse().join('.')
+      if (R.contains(ref, getLocalBranchesHEAD(cwd)) && isRunning(image)) {
+        debug(`branch ${branch}`)('up to date and running')
+        return Promise.resolve()
+      }
+        
       debug("branch")(branch, commit, message)
       
       exec(`git checkout ${branch}`, {cwd})
-      return getFreePorts()
-      .then((ports) => [image, R.head(R.difference(ports, usedPorts))])
-      .then(([image, port]) => usedPorts.push(port) && [image,port])
-    })
-    .then(([image, port]) =>
-      spawn(`docker build --tag ${image} ${cwd}`)
+      exec(`git pull`, {cwd})
+      return Promise.resolve()
+      .then(() => spawn(`docker build --tag ${image} ${cwd}`))
+      .then(()=> getImageRunPortsOrFreePorts(image))
+      .then(ports => port = R.head(ports))
       .then(() => shutdownIfRunning(image))
       .then(() => addToProxyRules(image, port))
       .then(() => refreshDns(image))
       .then(() => runImageOnPort(image, cwd, port))
       .catch(debug('error'))
-    )
+    })
   }, refs)
   
   return sequence
+}
+
+const getImageRunPortsOrFreePorts = (image) => {
+  const clearPorts = R.map(R.replace(/.*:(\d+)->/, '$1'))
+  let ports = clearPorts(R.match(new RegExp(image+'.*->'), exec('docker ps')))
+  if (R.isEmpty(ports)) return getFreePorts()
+  debug(`${image} was running on`)(ports)
+  return Promise.resolve(ports)
 }
 
 const processRepos = R.map((path) => {
   const name = R.takeLast(2, path.replace('.git','').split('/')).join('/')
   const cwd = [workdir,name].join('/')
   cloneRepoIfNotExists({path, cwd})
-  clearProxyRules()
-  return buildBranches({cwd, name, refs: getNotUpdatedRefs(cwd)})
+  // clearProxyRules()
+  return buildBranches({cwd, name, refs: getRemoteBranchesHEAD(cwd)})
   .then(writeProxyRules)
 })
 
 createWorkDir()
 const start = () => {
-  usedPorts = []
   return Promise.all(processRepos(repositories)).then(start).catch(debug('autodoker:error'))
 }
 

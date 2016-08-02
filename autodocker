@@ -2,18 +2,16 @@
 process.env.DEBUG   = process.env.DEBUG || "*,-portastic*"
 
 const R             = require('ramda')
-const port          = require('portastic')
 const debug         = R.memoize(require('debug'))
 const fs            = require('fs')
 const {spawn, exec} = require('./process')
 const config        = require('./config')
 const proxyRules    = require('./proxyRules')
 const git           = require('./git')
-
+const docker        = require('./docker')
 const refreshDns = (image) =>
   exec(`echo "address=/${image}/127.0.0.1" >> /etc/dnsmasq.conf && pkill dnsmasq; dnsmasq`)
 
-const getFreePorts = () => port.find(config.portastic)
 
 const createDir = (dir) => {
   try {
@@ -22,31 +20,7 @@ const createDir = (dir) => {
     exec(`mkdir ${dir}`)
   }
 }
-  
-const runImageOnPort = (image, cwd, port) => {
-  let [fromPort=8083, ...ports] = exposedPorts(fs.readFileSync(`${cwd}/Dockerfile`))
-  spawn(`docker run --interactive --detach --name ${image} --publish ${port}:${fromPort} ${image}`)
-  return port
-}
 
-const dockerPS = (image, key='') => {
-  try {
-    return !R.isEmpty(exec(`docker ps ${key} | grep -E ${image}`))
-  } catch (e) {
-    return false
-  }
-}
-const isRunning = image => dockerPS(image)
-const wasRunning = image => dockerPS(image, '-a')
-  
-const shutdownKernel = image =>
-  exec(`docker rm -f ${image}`)
-
-const removeIfRunning = image => {
-  if (wasRunning(image)) shutdownKernel(image) && debug('shutdown')(image)
-}
-
-const exposedPorts = R.compose(R.flatten, R.map(R.match(/\d+/g)), R.match(/expose.*/gi), String)
 
 const buildBranches = ({cwd, refs, name}) => {
   git.updateBranches(cwd)
@@ -58,7 +32,7 @@ const buildBranches = ({cwd, refs, name}) => {
     let port = null
     sequence = sequence
     .then( () => {
-      if (R.contains(ref, git.getLocalBranchesHEAD(cwd)) && isRunning(image)) {
+      if (R.contains(ref, git.getLocalBranchesHEAD(cwd)) && docker.isRunning(image)) {
         debug(`branch ${branch}`)('up to date and running')
         return Promise.resolve()
       }
@@ -69,25 +43,17 @@ const buildBranches = ({cwd, refs, name}) => {
       git.pull(cwd)
       return Promise.resolve()
         // .then(() => spawn(`docker build --tag ${image} ${cwd}`))
-        .then(()=> getImageRunPortsOrFreePorts(image))
+        .then(() => docker.getImageRunPortsOrFreePorts(image))
         .then(ports => port = R.head(ports))
-        .then(() => removeIfRunning(image))
+        .then(() => docker.removeIfRunning(image))
         .then(() => proxyRules.add(image, port))
         .then(() => refreshDns(image))
-        .then(() => runImageOnPort(image, cwd, port))
+        .then(() => docker.runImageOnPort(image, cwd, port))
         .catch(debug('error'))
     })
   }, refs)
   
   return sequence
-}
-
-const getImageRunPortsOrFreePorts = (image) => {
-  const clearPorts = R.map(R.replace(/.*:(\d+)->/, '$1'))
-  let ports = clearPorts(R.match(new RegExp(image+'.*->'), exec('docker ps')))
-  if (R.isEmpty(ports)) return getFreePorts()
-  debug(`${image} was running on`)(ports)
-  return Promise.resolve(ports)
 }
 
 const processRepos = R.map((path) => {

@@ -1,30 +1,28 @@
 #!/usr/bin/env node-dev
-process.env.DEBUG = process.env.DEBUG || "*,-portastic*"
+process.env.DEBUG   = process.env.DEBUG || "*,-portastic*"
+
 const R             = require('ramda')
 const port          = require('portastic')
 const debug         = R.memoize(require('debug'))
 const fs            = require('fs')
 const {spawn, exec} = require('./process')
+const config        = require('./config')
 
-const {
-  repositories, timeout, workdir, portastic, rulesFile
-} = require('./config')
-
-let proxyRules = []
-const clearProxyRules = () => proxyRules = []
+let proxyRules = JSON.parse(fs.readFileSync(__dirname+config.rulesFile))
 const addToProxyRules = (host, port) => {
   debug('proxy:rules:add')(host, port)
-  proxyRules.push([host, `http://127.0.0.1:${port}`])
+  idx = R.defaultTo(proxyRules.length, R.findIndex(R.propEq(0, host), proxyRules))
+  proxyRules[idx] = [host, `http://127.0.0.1:${port}`]
 }
 const refreshDns = (image) =>
   exec(`echo "address=/${image}/127.0.0.1" >> /etc/dnsmasq.conf && pkill dnsmasq; dnsmasq`)
 
 const writeProxyRules = () => {
   debug('proxy:rules:written')(proxyRules)
-  fs.writeFileSync(__dirname+rulesFile, JSON.stringify(proxyRules, null, ' '))
+  fs.writeFileSync(__dirname+config.rulesFile, JSON.stringify(proxyRules, null, ' '))
 }
 
-const getFreePorts = () => port.find(portastic)
+const getFreePorts = () => port.find(config.portastic)
 
 const createDir = (dir) => {
   try {
@@ -67,23 +65,24 @@ const runImageOnPort = (image, cwd, port) => {
   return port
 }
 
-const isRunning = image => {
+const dockerPS = (image, key='') => {
   try {
-    return !R.isEmpty(exec(`docker ps -a | grep -E ${image}`))
+    return !R.isEmpty(exec(`docker ps ${key} | grep -E ${image}`))
   } catch (e) {
     return false
   }
 }
+const isRunning = image => dockerPS(image)
+const wasRunning = image => dockerPS(image, '-a')
   
 const shutdownKernel = image =>
   exec(`docker rm -f ${image}`)
 
-const shutdownIfRunning = image => {
-  if (isRunning(image)) shutdownKernel(image) && debug('shutdown')(image)
+const removeIfRunning = image => {
+  if (wasRunning(image)) shutdownKernel(image) && debug('shutdown')(image)
 }
 
 const exposedPorts = R.compose(R.flatten, R.map(R.match(/\d+/g)), R.match(/expose.*/gi), String)
-
 
 const buildBranches = ({cwd, refs, name}) => {
   exec(`git fetch --all`, {cwd})
@@ -104,14 +103,14 @@ const buildBranches = ({cwd, refs, name}) => {
       exec(`git checkout ${branch}`, {cwd})
       exec(`git pull`, {cwd})
       return Promise.resolve()
-      .then(() => spawn(`docker build --tag ${image} ${cwd}`))
-      .then(()=> getImageRunPortsOrFreePorts(image))
-      .then(ports => port = R.head(ports))
-      .then(() => shutdownIfRunning(image))
-      .then(() => addToProxyRules(image, port))
-      .then(() => refreshDns(image))
-      .then(() => runImageOnPort(image, cwd, port))
-      .catch(debug('error'))
+        // .then(() => spawn(`docker build --tag ${image} ${cwd}`))
+        .then(()=> getImageRunPortsOrFreePorts(image))
+        .then(ports => port = R.head(ports))
+        .then(() => removeIfRunning(image))
+        .then(() => addToProxyRules(image, port))
+        .then(() => refreshDns(image))
+        .then(() => runImageOnPort(image, cwd, port))
+        .catch(debug('error'))
     })
   }, refs)
   
@@ -128,15 +127,15 @@ const getImageRunPortsOrFreePorts = (image) => {
 
 const processRepos = R.map((path) => {
   const name = R.takeLast(2, path.replace('.git','').split('/')).join('/')
-  const cwd = [workdir,name].join('/')
+  const cwd = [config.workdir,name].join('/')
   cloneRepoIfNotExists({path, cwd})
   // clearProxyRules()
   return buildBranches({cwd, name, refs: getRemoteBranchesHEAD(cwd)})
   .then(writeProxyRules)
 })
 
-R.map(createDir, ['./logs', workdir])
+R.map(createDir, ['./logs', config.workdir])
 const start = () => {
-  return Promise.all(processRepos(repositories)).then(start).catch(debug('autodoker:error'))
+  return Promise.all(processRepos(config.repositories)).then(start).catch(debug('autodoker:error'))
 }
 start()

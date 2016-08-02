@@ -8,6 +8,7 @@ const fs            = require('fs')
 const {spawn, exec} = require('./process')
 const config        = require('./config')
 const proxyRules    = require('./proxyRules')
+const git           = require('./git')
 
 const refreshDns = (image) =>
   exec(`echo "address=/${image}/127.0.0.1" >> /etc/dnsmasq.conf && pkill dnsmasq; dnsmasq`)
@@ -21,34 +22,7 @@ const createDir = (dir) => {
     exec(`mkdir ${dir}`)
   }
 }
-
-const cloneRepoIfNotExists = ({path, cwd}) => {
-  try {
-    fs.statSync(cwd)
-  } catch (e) {
-    exec(`git clone ${path} ${cwd}`)
-  }
-}
-
-const parseStdout = R.compose(R.reject(R.isEmpty), R.split('\n'), String)
-const removeSelectedBranch = R.map(R.replace(/^(\*)?\s+/,''))
-const removeOrigin = R.map(R.replace(/^\s+origin\//,''))
-const removeHEAD = R.reject(R.test(/HEAD/))
   
-const getRemoteBranchesHEAD = (cwd) =>
-  removeOrigin(removeHEAD(parseStdout(exec("git branch -r -v --no-color", {cwd}))))
-  
-const getLocalBranchesHEAD = (cwd) =>
-  removeSelectedBranch(parseStdout(exec("git branch -v --no-color", {cwd})))
-  
-const getNotUpdatedRefs = (cwd) => {
-  let refs = R.difference(getRemoteBranchesHEAD(cwd), getLocalBranchesHEAD(cwd))
-  debug('not:updated:refs')(refs)
-  return refs
-}
-
-const updateBranches = (cwd) => exec("git fetch -a", {cwd})
-
 const runImageOnPort = (image, cwd, port) => {
   let [fromPort=8083, ...ports] = exposedPorts(fs.readFileSync(`${cwd}/Dockerfile`))
   spawn(`docker run --interactive --detach --name ${image} --publish ${port}:${fromPort} ${image}`)
@@ -75,7 +49,8 @@ const removeIfRunning = image => {
 const exposedPorts = R.compose(R.flatten, R.map(R.match(/\d+/g)), R.match(/expose.*/gi), String)
 
 const buildBranches = ({cwd, refs, name}) => {
-  exec(`git fetch --all`, {cwd})
+  git.updateBranches(cwd)
+  
   sequence = Promise.resolve()
   R.map(ref => {
     let [,branch, commit, message] = R.match(/(\w+)\s+(\w+)\s+(.*)/, ref)
@@ -83,15 +58,15 @@ const buildBranches = ({cwd, refs, name}) => {
     let port = null
     sequence = sequence
     .then( () => {
-      if (R.contains(ref, getLocalBranchesHEAD(cwd)) && isRunning(image)) {
+      if (R.contains(ref, git.getLocalBranchesHEAD(cwd)) && isRunning(image)) {
         debug(`branch ${branch}`)('up to date and running')
         return Promise.resolve()
       }
         
       debug("branch")(branch, commit, message)
       
-      exec(`git checkout ${branch}`, {cwd})
-      exec(`git pull`, {cwd})
+      git.checkout({branch, cwd})
+      git.pull(cwd)
       return Promise.resolve()
         // .then(() => spawn(`docker build --tag ${image} ${cwd}`))
         .then(()=> getImageRunPortsOrFreePorts(image))
@@ -118,8 +93,8 @@ const getImageRunPortsOrFreePorts = (image) => {
 const processRepos = R.map((path) => {
   const name = R.takeLast(2, path.replace('.git','').split('/')).join('/')
   const cwd = [config.workdir,name].join('/')
-  cloneRepoIfNotExists({path, cwd})
-  return buildBranches({cwd, name, refs: getRemoteBranchesHEAD(cwd)})
+  git.cloneIfNotExists({path, cwd})
+  return buildBranches({cwd, name, refs: git.getRemoteBranchesHEAD(cwd)})
   .then(proxyRules.write)
 })
 

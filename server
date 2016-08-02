@@ -3,49 +3,35 @@ process.env.DEBUG = process.env.DEBUG || "*"
 
 const http        = require('http')
 const httpProxy   = require('http-proxy')
-const fs          = require('fs')
 const R           = require('ramda')
-const {rulesFile} = require('./config')
 const proxy       = httpProxy.createProxy(require('./config').proxy)
 const debug       = R.memoize(require('debug'))
-
-let matchers      = []
-const createMatcher = ([rule, target]) =>
-  R.ifElse(R.test(new RegExp(rule, 'gi')), ()=>target, ()=>null)
-
-const updateMatchers = () => {
-  matchers = R.map(createMatcher, JSON.parse(fs.readFileSync(__dirname+rulesFile)))
-  debug('server:matchers', matchers)
-}
-
-setInterval(updateMatchers, 1000)
+const {matchURL}  = require('./urlMatcher')
   
 proxy.on('error', (err, req, res) => {
   res.writeHead(500, {
     'Content-Type': 'text/plain'
   })
+  debug('server:error')(err.toString(), req.headers.host + req.url)
   res.end(err.toString())
-  debug('error')(err.toString())
-  debug('error')(req.headers.host + req.url)
 })
 
 debug('server')('started')
 http.createServer(function(req, res) {
   let URL = req.headers.host + req.url
-  let target = R.head(R.reject(R.isNil, R.ap(matchers, [URL])))
+  let target = matchURL(URL)
   if (target) {
-    // if (R.test(/socket.io\/\?/, req.url)) {
-      // return proxy.web(req, res, {target});
-    // } else {
-      debug('redirect')(`${URL} -> ${target}`)
-      return proxy.web(req, res, {target});
-    // }
+    debug('server:redirect:http')(`${URL} -> ${target}`)
+    return proxy.web(req, res, {target});
   }
 
+  debug('server:error')(`${URL} not matched`)
   res.writeHead(500, { 'Content-Type': 'text/plain' });
   res.end('The request url and path did not match any of the listed rules!');
 }).listen(80)
 
-// proxy.on('upgrade', function (req, socket, head) {
-//   proxy.ws(req, socket, head);
-// });
+proxy.on('upgrade', (req, socket, head) => {
+  throw 'Not implemented'
+  debug('server:redirect:socket')(`${URL} -> ${target}`)
+  proxy.ws(req, socket, head);
+})

@@ -16,5 +16,6 @@ module.exports = {
       ws: true,
       xfwd: true
   },
-  rulesFile: '/proxyRules.json'
+  rulesFile: '/proxyRules.json',
+  updateMatchersInterval: 1000
 }

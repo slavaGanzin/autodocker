@@ -7,20 +7,10 @@ const debug         = R.memoize(require('debug'))
 const fs            = require('fs')
 const {spawn, exec} = require('./process')
 const config        = require('./config')
+const proxyRules    = require('./proxyRules')
 
-let proxyRules = JSON.parse(fs.readFileSync(__dirname+config.rulesFile))
-const addToProxyRules = (host, port) => {
-  debug('proxy:rules:add')(host, port)
-  idx = R.defaultTo(proxyRules.length, R.findIndex(R.propEq(0, host), proxyRules))
-  proxyRules[idx] = [host, `http://127.0.0.1:${port}`]
-}
 const refreshDns = (image) =>
   exec(`echo "address=/${image}/127.0.0.1" >> /etc/dnsmasq.conf && pkill dnsmasq; dnsmasq`)
-
-const writeProxyRules = () => {
-  debug('proxy:rules:written')(proxyRules)
-  fs.writeFileSync(__dirname+config.rulesFile, JSON.stringify(proxyRules, null, ' '))
-}
 
 const getFreePorts = () => port.find(config.portastic)
 
@@ -107,7 +97,7 @@ const buildBranches = ({cwd, refs, name}) => {
         .then(()=> getImageRunPortsOrFreePorts(image))
         .then(ports => port = R.head(ports))
         .then(() => removeIfRunning(image))
-        .then(() => addToProxyRules(image, port))
+        .then(() => proxyRules.add(image, port))
         .then(() => refreshDns(image))
         .then(() => runImageOnPort(image, cwd, port))
         .catch(debug('error'))
@@ -129,9 +119,8 @@ const processRepos = R.map((path) => {
   const name = R.takeLast(2, path.replace('.git','').split('/')).join('/')
   const cwd = [config.workdir,name].join('/')
   cloneRepoIfNotExists({path, cwd})
-  // clearProxyRules()
   return buildBranches({cwd, name, refs: getRemoteBranchesHEAD(cwd)})
-  .then(writeProxyRules)
+  .then(proxyRules.write)
 })
 
 R.map(createDir, ['./logs', config.workdir])

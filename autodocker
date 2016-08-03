@@ -9,9 +9,9 @@ const config        = require('./config')
 const proxyRules    = require('./proxyRules')
 const git           = require('./git')
 const docker        = require('./docker')
-const refreshDns = (image) =>
-  exec(`echo "address=/${image}/127.0.0.1" >> /etc/dnsmasq.conf && pkill dnsmasq; dnsmasq`)
 
+const refreshDns = (image) =>
+  exec(`(grep "${image}/127.0.0.1" /etc/dnsmasq.conf || echo "address=/${image}/127.0.0.1" >> /etc/dnsmasq.conf) && pkill dnsmasq; dnsmasq`)
 
 const createDir = (dir) => {
   try {
@@ -42,14 +42,14 @@ const buildBranches = ({cwd, refs, name}) => {
       git.checkout({branch, cwd})
       git.pull(cwd)
       return Promise.resolve()
-        // .then(() => spawn(`docker build --tag ${image} ${cwd}`))
+        .then(() => spawn(`docker build --tag ${image} ${cwd}`))
         .then(() => docker.getImageRunPortsOrFreePorts(image))
         .then(ports => port = R.head(ports))
         .then(() => docker.removeIfRunning(image))
         .then(() => proxyRules.add(image, port))
         .then(() => refreshDns(image))
         .then(() => docker.runImageOnPort(image, cwd, port))
-        .catch(debug('error'))
+        .catch(debug('autodocker:error'))
     })
   }, refs)
   
@@ -64,7 +64,7 @@ const processRepos = R.map((path) => {
   .then(proxyRules.write)
 })
 
-R.map(createDir, ['./logs', config.workdir])
+R.map(createDir, [config.logdir, config.workdir])
 const start = () => {
   return Promise.all(processRepos(config.repositories)).then(start).catch(debug('autodoker:error'))
 }

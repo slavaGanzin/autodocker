@@ -1,13 +1,13 @@
 module.exports = {
-  timeout: process.env.TIMEOUT || 1000,
   repositories: [
     'https://github.com/slavaGanzin/autodockerHelloWorld.git'
   ],
   workdir: '/tmp/autodocker',
+  logdir: '/var/log/autodocker',
+  rulesFile: '/tmp/autodocker/proxyRules.json',
   portastic: {
     min: 60000,
-    // max: 61000
-    max: 60002
+    max: 61000
   },
   proxy: {
       changeOrigin: true,
@@ -16,6 +16,5 @@ module.exports = {
       ws: true,
       xfwd: true
   },
-  rulesFile: '/tmp/autodocker/proxyRules.json',
   updateMatchersInterval: 1000
 }

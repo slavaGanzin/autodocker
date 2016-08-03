@@ -21,7 +21,6 @@ const createDir = (dir) => {
   }
 }
 
-
 const buildBranches = ({cwd, refs, name}) => {
   git.updateBranches(cwd)
   
@@ -32,7 +31,9 @@ const buildBranches = ({cwd, refs, name}) => {
     let port = null
     sequence = sequence
     .then( () => {
-      if (R.contains(ref, git.getLocalBranchesHEAD(cwd)) && docker.isRunning(image)) {
+      let running = docker.getRunning(image)
+      if (R.contains(ref, git.getLocalBranchesHEAD(cwd)) && running) {
+        proxyRules.add(image, running.ports[0])
         debug(`branch ${branch}`)('up to date and running')
         return Promise.resolve()
       }
@@ -56,16 +57,20 @@ const buildBranches = ({cwd, refs, name}) => {
   return sequence
 }
 
-const processRepos = R.map((path) => {
+const processRepo = (path) => {
   const name = R.takeLast(2, path.replace('.git','').split('/')).join('/')
   const cwd = [config.workdir,name].join('/')
   git.cloneIfNotExists({path, cwd})
   return buildBranches({cwd, name, refs: git.getRemoteBranchesHEAD(cwd)})
   .then(proxyRules.write)
-})
+}
 
 R.map(createDir, [config.logdir, config.workdir])
 const start = () => {
-  return Promise.all(processRepos(config.repositories)).then(start).catch(debug('autodoker:error'))
+  return Promise.all(
+    R.map(processRepo, config.repositories)
+  )
+  .then(start)
+  .catch(debug('autodoker:error'))
 }
 start()

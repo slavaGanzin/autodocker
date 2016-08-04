@@ -9,17 +9,9 @@ const config        = require('./config')
 const proxyRules    = require('./proxyRules')
 const git           = require('./git')
 const docker        = require('./docker')
+const dns           = require('./dns')
 
-const refreshDns = (image) =>
-  exec(`(grep "${image}/127.0.0.1" /etc/dnsmasq.conf || echo "address=/${image}/127.0.0.1" >> /etc/dnsmasq.conf) && pkill dnsmasq; dnsmasq`)
-
-const createDir = (dir) => {
-  try {
-    fs.statSync(dir)
-  } catch (e) {
-    exec(`mkdir ${dir}`)
-  }
-}
+require('./init').init()
 
 const buildBranches = ({cwd, refs, name}) => {
   git.updateBranches(cwd)
@@ -48,7 +40,7 @@ const buildBranches = ({cwd, refs, name}) => {
         .then(ports => port = R.head(ports))
         .then(() => docker.removeIfRunning(image))
         .then(() => proxyRules.add(image, port))
-        .then(() => refreshDns(image))
+        .then(() => dns.updateDnsmasq(image))
         .then(() => docker.runImageOnPort(image, cwd, port))
         .catch(debug('autodocker:error'))
     })
@@ -65,7 +57,6 @@ const processRepo = (path) => {
   .then(proxyRules.write)
 }
 
-R.map(createDir, [config.logdir, config.workdir])
 const start = () => {
   return Promise.all(
     R.map(processRepo, config.repositories)

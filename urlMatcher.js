@@ -1,6 +1,6 @@
 const R          = require('ramda')
 const debug      = R.memoize(require('debug'))
-const config     = require('./config')
+const config     = require(configPath)
 const fs         = require('fs')
 const proxyRules = require('./proxyRules')
 

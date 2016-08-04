@@ -2,7 +2,7 @@ const R                   = require('ramda')
 const debug               = R.memoize(require('debug'))
 const { execSync, spawn } = require('child_process')
 const fs                  = require('fs')
-const config              = require('./config')
+const config              = require(configPath)
 
 const exec = (...args) => {
   debug(...args)('')

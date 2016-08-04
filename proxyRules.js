@@ -1,7 +1,7 @@
 const R      = require('ramda')
 const debug  = R.memoize(require('debug'))
 const fs     = require('fs')
-const config = require('./config')
+const config = require(configPath)
 
 let proxyRules = []
 const get = () => {

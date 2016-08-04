@@ -1,17 +1,17 @@
 #!/usr/bin/env node-dev
 process.env.DEBUG   = process.env.DEBUG || "*,-portastic*"
+require('./init').init()
 
 const R             = require('ramda')
 const debug         = R.memoize(require('debug'))
 const fs            = require('fs')
 const {spawn, exec} = require('./process')
-const config        = require('./config')
+const config        = require(configPath)
 const proxyRules    = require('./proxyRules')
 const git           = require('./git')
 const docker        = require('./docker')
 const dns           = require('./dns')
 
-require('./init').init()
 
 const buildBranches = ({cwd, refs, name}) => {
   git.updateBranches(cwd)

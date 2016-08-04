@@ -3,7 +3,7 @@ const debug         = R.memoize(require('debug'))
 const fs            = require('fs')
 const {spawn, exec} = require('./process')
 const port          = require('portastic')
-const config        = require('./config')
+const config        = require(configPath)
 
 const exposedPorts = R.compose(R.flatten, R.map(R.match(/\d+/g)), R.match(/expose.*/gi), String)
 const parseDockerPorts = R.compose(R.tail, R.match(/.*:(\d+)->(\d+)/))
@@ -16,11 +16,13 @@ const runImageOnPort = (image, cwd, inPort) => {
   return inPort
 }
 
+//TODO: fix ps -a
 const ps = (key='') => {
   let [columns, ...images] = R.map(R.split(/\s{2,}/), R.reject(R.equals(''), R.split("\n", exec(`docker ps ${key}`))))
   columns = R.map(x => x.toLowerCase(), columns)
   return R.map(R.compose(R.evolve({ports: parseDockerPorts}), R.zipObj(columns)), images)
 }
+
 
 const getRunning    = image => R.find(R.propEq('image', image), ps())
 const getWasRunning = image => R.find(R.propEq('image', image), ps('-a'))

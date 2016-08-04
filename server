@@ -1,10 +1,12 @@
 #!/usr/bin/env node-dev
 process.env.DEBUG = process.env.DEBUG || "*"
+require('./init').init()
 
 const http        = require('http')
 const httpProxy   = require('http-proxy')
 const R           = require('ramda')
-const proxy       = httpProxy.createProxy(require('./config').proxy)
+const proxyConfig = require('/etc/autodocker/config').proxy
+const proxy       = httpProxy.createProxy(proxyConfig)
 const debug       = R.memoize(require('debug'))
 const {matchURL}  = require('./urlMatcher')
   

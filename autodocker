@@ -18,8 +18,7 @@ const buildBranches = ({cwd, refs, name}) => {
   
   sequence = Promise.resolve()
   R.map(ref => {
-    let [,branch, commit, message] = R.match(/(\w+)\s+(\w+)\s+(.*)/, ref)
-    let image = `${name}.${branch}`.toLowerCase().replace(/[\/]/g, '.').split('.').reverse().join('.')
+    let {branch, commit, message, image} = git.parseRef(ref, name)
     let port = null
     sequence = sequence
     .then( () => {

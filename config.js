@@ -4,7 +4,8 @@ module.exports = {
   ],
   workdir: '/tmp/autodocker',
   logdir: '/var/log/autodocker',
-  rulesFile: '/etc/autodocker/proxyRules.json',
+  rulesFile: '/etc/autodocker/proxy.json',
+  dnsFile: '/etc/autodocker/dns.json',
   portastic: {
     min: 60000,
     max: 61000

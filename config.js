@@ -6,6 +6,7 @@ module.exports = {
   logdir: '/var/log/autodocker',
   rulesFile: '/etc/autodocker/proxy.json',
   dnsFile: '/etc/autodocker/dns.json',
+  dnsmasqConf: process.env.DNSMASQ_CONF || '/etc/dnsmasq.d/autodocker.conf',
   portastic: {
     min: 60000,
     max: 61000

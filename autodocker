@@ -10,8 +10,6 @@ const config        = require(configPath)
 const proxyRules    = require('./proxyRules')
 const git           = require('./git')
 const docker        = require('./docker')
-const dns           = require('./dns')
-
 
 const buildBranches = ({cwd, refs, name}) => {
   git.updateBranches(cwd)
@@ -39,7 +37,6 @@ const buildBranches = ({cwd, refs, name}) => {
         .then(ports => port = R.head(ports))
         .then(() => docker.removeIfRunning(image))
         .then(() => proxyRules.add(image, port))
-        .then(() => dns.updateDnsmasq(image))
         .then(() => docker.runImageOnPort(image, cwd, port))
         .catch(debug('autodocker:error'))
     })

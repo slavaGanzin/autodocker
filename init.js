@@ -2,7 +2,8 @@ const fs            = require('fs')
 const { execSync }  = require('child_process')
 const R             = require('ramda')
 const debug         = R.memoize(require('debug'))
-global.configPath    = '/etc/autodocker/config.js'
+global.configPath   = '/etc/autodocker/config.js'
+const path          = require('path')
 
 const createDir = (dir) => {
   try {
@@ -23,12 +24,12 @@ const copyConfigIfNotExists = () => {
 }
 
 const init = () => {
-  createDir('/etc/autodocker')
+  createDir(path.dirname(configPath))
   copyConfigIfNotExists()
   const config = require(configPath)
-  R.map(createDir, [config.logdir, config.workdir])
+  R.map(createDir, [config.logdir, config.workdir, path.dirname(config.dnsmasqConf)])
 }
-init()
+
 module.exports = {
   init
 }

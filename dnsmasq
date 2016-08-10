@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 process.env.DEBUG = process.env.DEBUG || "*"
 global.configPath = '/etc/autodocker/config.js'
-require('./init').init()
 
 const R             = require('ramda')
 const {spawn, exec} = require('./process')
@@ -9,11 +8,13 @@ const ip            = require("ip")
 const fs            = require('fs')
 const config        = require('./config')
 const debug         = R.memoize(require('debug'))
+const proxyRules    = require('./proxyRules')
 
 const tick = () => {
   const localIp = ip.address()
   const imageToDnsmasq = R.map(image => `address=/${image}/${localIp}`)
-  const runningHosts = R.pluck(0, JSON.parse(fs.readFileSync(config.rulesFile)))
+  const runningHosts = R.pluck(0, proxyRules.get())
+  
   const newConf = imageToDnsmasq(runningHosts).join('\n')
   const oldConf = fs.readFileSync(config.dnsmasqConf, 'utf8')
   

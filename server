@@ -1,6 +1,6 @@
 #!/usr/bin/env node-dev
 process.env.DEBUG = process.env.DEBUG || "*"
-require('./init').init()
+global.configPath   = '/etc/autodocker/config.js'
 
 const http        = require('http')
 const httpProxy   = require('http-proxy')

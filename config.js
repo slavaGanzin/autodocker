@@ -1,4 +1,5 @@
 module.exports = {
+  user: 'vganzin',
   repositories: [
     'https://github.com/slavaGanzin/autodockerHelloWorld.git'
   ],

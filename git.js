@@ -5,7 +5,6 @@ const {exec} = require('./process')
 const removeGithub = R.compose(R.replace(/.git$/,''), R.replace(/.*git@github.com:/,''))
 
 const cloneIfNotExists = ({path, cwd}) => {
-  path = removeGithub(path)
   try {
     fs.statSync(cwd)
   } catch (e) {
@@ -24,7 +23,7 @@ const getRemoteBranchesHEAD = cwd =>
 const getLocalBranchesHEAD = cwd =>
   removeSelectedBranch(parseStdout(exec("git branch -v --no-color", {cwd})))
 
-const updateBranches = cwd => exec("git fetch -a", {cwd})
+const updateBranches = cwd => exec("git fetch --all", {cwd})
 
 const checkout = ({cwd, branch}) => exec(`git checkout ${branch}`, {cwd})
 const pull = cwd => exec(`git pull`, {cwd})

@@ -5,7 +5,7 @@ module.exports = {
   ],
   workdir: '/tmp/autodocker',
   logdir: '/var/log/autodocker',
-  rulesFile: '/etc/autodocker/proxy.json',
+  rulesFile: '/tmp/autodocker/proxy.json',
   dnsFile: '/etc/autodocker/dns.json',
   dnsmasqConf: process.env.DNSMASQ_CONF || '/etc/dnsmasq.d/autodocker.conf',
   portastic: {

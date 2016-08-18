@@ -10,14 +10,15 @@ const config        = require('./config')
 const debug         = R.memoize(require('debug'))
 const proxyRules    = require('./proxyRules')
 
+
+const localIp = ip.address()
+const imageToDnsmasq = R.map(image => `address=/${image}/${localIp}`)
+const runningHosts = R.pluck(0, proxyRules.get())
+
+const newConf = imageToDnsmasq(runningHosts).join('\n')
+const oldConf = fs.readFileSync(config.dnsmasqConf, 'utf8')
+
 const tick = () => {
-  const localIp = ip.address()
-  const imageToDnsmasq = R.map(image => `address=/${image}/${localIp}`)
-  const runningHosts = R.pluck(0, proxyRules.get())
-  
-  const newConf = imageToDnsmasq(runningHosts).join('\n')
-  const oldConf = fs.readFileSync(config.dnsmasqConf, 'utf8')
-  
   if (newConf != oldConf) {
     fs.writeFileSync(config.dnsmasqConf, newConf)
     debug('dnsmasq')("\n"+newConf+"\n")
@@ -26,5 +27,4 @@ const tick = () => {
   }
 }
 
-tick()
 setInterval(tick, 1000)

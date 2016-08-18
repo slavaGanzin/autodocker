@@ -8,7 +8,7 @@ const R             = require('ramda')
 const debug         = R.memoize(require('debug'))
 const path          = require('path')
 
-const createDir = (dir) => {
+const createDirIfNotExists = (dir) => {
   try {
     fs.statSync(dir)
   } catch (e) {
@@ -16,7 +16,6 @@ const createDir = (dir) => {
     execSync(`mkdir ${dir}`)
   }
 }
-
 
 const copyConfigIfNotExists = () => {
   try {
@@ -27,13 +26,21 @@ const copyConfigIfNotExists = () => {
   }
 }
 
-const init = () => {
-  createDir(path.dirname(configPath))
-  copyConfigIfNotExists()
-  const config = require(configPath)
-  const chown = dir => execSync(`chown -R ${config.user}:${config.user} ${dir}`)
-  
-  R.ap([createDir, chown], [config.logdir, config.workdir, path.dirname(config.dnsmasqConf)])
+const createFileIfNotExists = file => {
+  try {
+    fs.statSync(file)
+  } catch (e) {
+    debug('init')(`create ${file}`)
+    fs.writeFileSync(file, '')
+  }
 }
 
-init()
+createDirIfNotExists(path.dirname(configPath))
+copyConfigIfNotExists()
+const {logdir,workdir, dnsmasqConf, rulesFile, user} = require(configPath)
+const chown = dir => execSync(`chown -R ${user}:${user} ${dir}`)
+R.ap([createDirIfNotExists, chown], [logdir, workdir])
+R.ap([createFileIfNotExists, chown], [dnsmasqConf, rulesFile])
+
+const addConf = `conf-file=${dnsmasqConf}`
+execSync(`grep -E ${addConf} /etc/dnsmasq.conf || echo ${addConf} >> /etc/dnsmasq.conf`)

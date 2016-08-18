@@ -6,18 +6,17 @@ module.exports = {
   workdir: '/tmp/autodocker',
   logdir: '/var/log/autodocker',
   rulesFile: '/tmp/autodocker/proxy.json',
-  dnsFile: '/etc/autodocker/dns.json',
-  dnsmasqConf: process.env.DNSMASQ_CONF || '/etc/dnsmasq.d/autodocker.conf',
+  dnsmasqConf: process.env.DNSMASQ_CONF || '/etc/autodocker/dnsmasq.conf',
   portastic: {
     min: 60000,
     max: 61000
   },
   proxy: {
-      changeOrigin: true,
-      autoRewrite: true,
-      hostRewrite: true,
-      ws: true,
-      xfwd: true
+    changeOrigin: true,
+    autoRewrite: true,
+    hostRewrite: true,
+    ws: true,
+    xfwd: true
   },
   updateMatchersInterval: 1000
 }

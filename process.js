@@ -5,22 +5,23 @@ const fs                  = require('fs')
 const config              = require(configPath)
 
 const exec = (...args) => {
-  debug(...args)('')
+  debug(`stdout:${args}`)()
+  
   let result = String(execSync(...args))
-  if (result) debug(...args)(result)
+  if (result) debug(`stdout:${args}`)(result)
   return result
 }
 
 const _spawn = (args, {cwd} = {cwd: '.'}) =>
   new Promise((resolve, reject) => {
     let [command, ..._args] = R.split(' ', args)
-    debug(args)(cwd)
+    debug(`stdout:${args}`)(cwd)
     let file = args.replace(/[\s\/]/g,'.')
     let process = spawn(command, _args)
     let [stdout,stderr] = R.map(fs.createWriteStream, [`${config.logdir}/stdout-${file}`,`${config.logdir}/stderr-${file}`])
     
     process.stdout
-      .on('data', (data)=>debug(args)("\n" + String(data)))
+      .on('data', (data)=>debug(`stdout:${args}`)("\n" + String(data)))
       .pipe(stdout)
     process.stderr
       .on('data', (data)=>debug(`stderr:${args}`)("\n" + String(data)))

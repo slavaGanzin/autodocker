@@ -37,9 +37,9 @@ const createFileIfNotExists = file => {
 
 createDirIfNotExists(path.dirname(configPath))
 copyConfigIfNotExists()
-const {logdir,workdir, dnsmasqConf, rulesFile, user} = require(configPath)
+const {logdir,workdir,hooksdir, dnsmasqConf, rulesFile, user} = require(configPath)
 const chown = dir => execSync(`chown -R ${user}:${user} ${dir}`)
-R.ap([createDirIfNotExists, chown], [logdir, workdir])
+R.ap([createDirIfNotExists, chown], [logdir, workdir, hooksdir])
 R.ap([createFileIfNotExists, chown], [dnsmasqConf, rulesFile])
 
 const addConf = `conf-file=${dnsmasqConf}`
